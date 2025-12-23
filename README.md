@@ -110,13 +110,8 @@ Data/Data2/
 
 ```
 Code/Bai2/
-├── mBART50_VI_EN.ipynb          # Notebook VI→EN (33 code cells + 33 markdown)
-├── mBART50_EN_VI.ipynb          # Notebook EN→VI (26 code cells + 26 markdown)
-├── NOTEBOOK_GUIDE.md            # Hướng dẫn chi tiết cấu trúc notebook
-├── MARKDOWN_VI_EN.txt           # Markdown cho VI→EN
-├── MARKDOWN_EN_VI.txt           # Markdown cho EN→VI
-├── insert_markdown.py           # Script tự động thêm markdown
-└── add_markdown.py              # Script helper
+├── mBART50_VI_EN.ipynb         
+├── mBART50_EN_VI.ipynb       
 ```
 
 ### 🔧 Training Configuration
