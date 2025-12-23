@@ -80,13 +80,13 @@ LR = 3e-5
 ```
 
 ### Features
-- ✅ Data cleaning + deduplication (500k → 340k)
-- ✅ Mixed precision training (FP16)
-- ✅ Early stopping (patience=2)
-- ✅ Error analysis (tự động tag lỗi)
-- ✅ Gemini Judge scoring
-- ✅ Medical domain scoring
-- ✅ Auto push to HuggingFace
+- Data cleaning + deduplication (500k → 340k)
+- Mixed precision training (FP16)
+- Early stopping (patience=2)
+- Error analysis (tự động tag lỗi)
+- Gemini Judge scoring
+- Medical domain scoring
+- Auto push to HuggingFace
 
 ---
 
