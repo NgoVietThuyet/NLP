@@ -384,7 +384,7 @@ jupyter notebook
 
 ---
 
-## 📊 Kết Quả
+## Kết Quả
 
 ### **Bài 2: Machine Translation Summary**
 
@@ -395,39 +395,8 @@ jupyter notebook
 
 **Observation**: EN→VI đạt BLEU cao hơn vì model dễ học pattern EN→VI và medical terminology tiếng Việt ít ambiguous hơn.
 
----
 
-## 🐛 Troubleshooting
-
-### **Issue 1: CUDA Out of Memory**
-
-```python
-# Giảm batch size
-TRAIN_BS = 1
-GRAD_ACC = 8
-
-# Clear cache
-torch.cuda.empty_cache()
-```
-
-### **Issue 2: Tokenizer KeyError**
-
-```python
-# Phải set src_lang và tgt_lang
-tokenizer.src_lang = "vi_VN"
-tokenizer.tgt_lang = "en_XX"
-```
-
-### **Issue 3: Gemini API Rate Limit**
-
-```python
-# Tăng sleep time
-time.sleep(2)  # giữa mỗi request
-```
-
----
-
-## 📚 Tài Liệu Tham Khảo
+## Tài Liệu Tham Khảo
 
 ### **Papers**:
 1. **Attention Is All You Need** - https://arxiv.org/abs/1706.03762
@@ -443,26 +412,5 @@ time.sleep(2)  # giữa mỗi request
   - https://huggingface.co/ngothuyet/mbart50-vien
   - https://huggingface.co/ngothuyet/mbart50-envi
 
----
 
-## 👥 Contributors
 
-- **Ngô Viết Thuyết** - [GitHub](https://github.com/NgoVietThuyet)
-- **Nguyễn Đức Hưng**
-
----
-
-## 📄 License
-
-MIT License - Free to use for research and education.
-
----
-
-## 📧 Contact
-
-- **Repository**: https://github.com/NgoVietThuyet/NLP
-- **Issues**: https://github.com/NgoVietThuyet/NLP/issues
-
----
-
-**Last Updated**: December 2024
