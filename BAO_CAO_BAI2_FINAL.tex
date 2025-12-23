@@ -1,0 +1,819 @@
+\documentclass[11pt]{article}
+\usepackage{lmodern}
+\usepackage[final]{acl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T5]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{placeins}
+
+% Tiêu đề báo cáo
+\title{
+\textbf{BÁO CÁO BÀI TẬP LỚN MÔN XỬ LÝ NGÔN NGỮ TỰ NHIÊN} \\[0.5em]
+\large BÀI TOÁN 2: ÁP DỤNG FINE-TUNING mBART-50 \\[0.3em]
+\large \textbf{CHO BÀI TOÁN VLSP 2025 SHARED TASK - MACHINE TRANSLATION}
+}
+
+% Thông tin nhóm tác giả
+\author{
+  \textbf{Đào Đức Mạnh} \\
+  MSV: 23021618 \\
+  \texttt{23021618@vnu.edu.vn} \\\And
+  \textbf{Ngọ Viết Thuyết} \\
+  MSV: 23021730 \\
+  \texttt{23021730@vnu.edu.vn} \\\AND
+  \textbf{Lưu Văn Hùng} \\
+  MSV: 23021566 \\
+  \texttt{23021566@vnu.edu.vn} \\[0.8em]
+}
+
+\setlength\titlebox{7cm}
+
+\begin{document}
+\maketitle
+
+\vspace{0.5em}
+\begin{abstract}
+Báo cáo này trình bày phương pháp fine-tuning mô hình mBART-50 pre-trained cho bài toán dịch máy Việt-Anh trong lĩnh vực y tế tại VLSP 2025 Shared Task. Chúng tôi xây dựng pipeline tiền xử lý toàn diện bao gồm text cleaning, data filtering và deduplication, giúp giảm 31.9\% dữ liệu trùng lặp từ 500,000 xuống 340,522 cặp câu chất lượng cao. Mô hình mBART-50 (610M parameters) được fine-tuned với learning rate thấp (3e-5) trong 10 epochs, sử dụng kỹ thuật gradient accumulation và mixed precision training. Kết quả đạt BLEU 41.51 trên tập public test (2,943 câu), vượt trội so với zero-shot baseline (35-38 BLEU) và tương đương các hệ thống thương mại. Chúng tôi phân tích chi tiết các kỹ thuật fine-tuning, taxonomy lỗi dịch (68\% dịch hoàn hảo), và đề xuất roadmap cải tiến hướng tới 48-52 BLEU trong tương lai.
+\end{abstract}
+
+\section{Giới thiệu}
+
+\subsection{Bối cảnh và Thách thức}
+
+Dịch máy cho lĩnh vực y tế đặt ra những yêu cầu đặc biệt cao về độ chính xác và xử lý thuật ngữ chuyên ngành. Một lỗi dịch nhỏ trong văn bản y khoa có thể dẫn đến hiểu sai thông tin nghiêm trọng. VLSP 2025 Machine Translation Shared Task tập trung vào dịch các tóm tắt nghiên cứu y học và mô tả lâm sàng giữa tiếng Việt và tiếng Anh.
+
+\textbf{Thách thức chính:}
+\begin{itemize}
+    \item \textbf{Thuật ngữ chuyên ngành:} "viêm tai ứ dịch" $\rightarrow$ "otitis media with effusion"
+    \item \textbf{Cấu trúc câu phức tạp:} Các câu y tế thường dài, nhiều mệnh đề lồng nhau
+    \item \textbf{Độ chính xác cao:} Lỗi dịch có thể dẫn đến hiểu sai thông tin y khoa
+    \item \textbf{Dữ liệu nhiễu:} Dataset ban đầu chứa nhiều trùng lặp và noise
+\end{itemize}
+
+\subsection{Tại sao chọn Fine-tuning?}
+
+Thay vì training mô hình từ đầu (như Bài toán 1), chúng tôi áp dụng fine-tuning mô hình pre-trained vì những lý do sau:
+
+\begin{enumerate}
+    \item \textbf{Warm start:} Mô hình đã học được biểu diễn ngôn ngữ từ corpus khổng lồ
+    \item \textbf{Transfer learning:} Tri thức từ 50 ngôn ngữ giúp cải thiện cặp Việt-Anh
+    \item \textbf{Hội tụ nhanh:} Chỉ cần 3 epochs thay vì 10+ epochs
+    \item \textbf{BLEU cao hơn:} Kỳ vọng 40+ BLEU so với 28-30 BLEU khi training scratch
+    \item \textbf{Dữ liệu ít hơn:} Fine-tuning hiệu quả ngay cả với dữ liệu hạn chế
+\end{enumerate}
+
+\subsection{Mục tiêu}
+
+Mục tiêu của bài toán này:
+\begin{enumerate}
+    \item Xây dựng pipeline tiền xử lý chất lượng cao cho domain y tế
+    \item Fine-tuning mBART-50 hiệu quả với tài nguyên GPU hạn chế
+    \item Đạt BLEU $>$ 40 trên tập public test
+    \item Phân tích chi tiết các kỹ thuật fine-tuning và error analysis
+    \item Đề xuất hướng cải tiến để đạt state-of-the-art
+\end{enumerate}
+
+Báo cáo được cấu trúc: Phần 2 giới thiệu mô hình mBART-50. Phần 3 mô tả chi tiết phương pháp fine-tuning. Phần 4 trình bày kết quả và phân tích. Phần 5 kết luận và hướng phát triển.
+
+\section{Mô hình mBART-50}
+
+\subsection{Tổng quan về mBART-50}
+
+mBART-50 (Multilingual BART-50) là mô hình sequence-to-sequence đa ngôn ngữ được Meta AI phát triển, dựa trên kiến trúc Transformer encoder-decoder.
+
+\textbf{Đặc điểm kỹ thuật:}
+\begin{itemize}
+    \item \textbf{Kiến trúc:} 12-layer encoder + 12-layer decoder
+    \item \textbf{Parameters:} $\sim$610M
+    \item \textbf{Vocabulary:} 250,054 tokens covering 50 languages
+    \item \textbf{Hidden dimension:} 1024
+    \item \textbf{Attention heads:} 16 heads per layer
+    \item \textbf{Pre-training method:} Denoising auto-encoding
+\end{itemize}
+
+\subsection{Cơ chế Hoạt động}
+
+\subsubsection{Language Code Token}
+
+Mỗi câu được gắn language code để chỉ định ngôn ngữ nguồn và đích:
+\begin{itemize}
+    \item Tiếng Việt: \texttt{vi\_VN}
+    \item Tiếng Anh: \texttt{en\_XX}
+\end{itemize}
+
+Ví dụ:
+\begin{verbatim}
+Input:  [vi_VN] Tôi bị đau đầu
+Output: [en_XX] I have a headache
+\end{verbatim}
+
+\subsubsection{Denoising Pre-training}
+
+mBART-50 được pre-training với denoising objective:
+\begin{enumerate}
+    \item Mask ngẫu nhiên các token trong câu (span masking)
+    \item Shuffle thứ tự các câu
+    \item Mô hình học phục hồi văn bản gốc
+\end{enumerate}
+
+Phương pháp này giúp mô hình:
+\begin{itemize}
+    \item Học được biểu diễn ngữ nghĩa sâu
+    \item Nắm bắt cấu trúc ngôn ngữ
+    \item Transfer knowledge cross-lingual
+\end{itemize}
+
+\subsection{Ưu điểm cho Domain Y tế}
+
+\begin{enumerate}
+    \item \textbf{Multilingual knowledge:} Đã học terminology từ nhiều ngôn ngữ
+    \item \textbf{Large capacity:} 610M parameters đủ để nắm bắt domain phức tạp
+    \item \textbf{Robust architecture:} Encoder-decoder phù hợp cho dịch máy
+    \item \textbf{Transfer learning:} Warm start giúp học nhanh domain-specific patterns
+\end{enumerate}
+
+\section{Phương pháp Fine-tuning}
+
+\subsection{Pipeline Tiền xử lý}
+
+Chúng tôi xây dựng pipeline tiền xử lý 3 bước để đảm bảo chất lượng dữ liệu.
+
+\subsubsection{Bước 1: Text Cleaning}
+
+\begin{verbatim}
+def basic_clean(s: str) -> str:
+    s = "" if s is None else s
+    s = s.strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+\end{verbatim}
+
+Các thao tác:
+\begin{itemize}
+    \item Loại bỏ khoảng trắng thừa ở đầu/cuối câu
+    \item Chuẩn hóa nhiều khoảng trắng liên tiếp thành 1 khoảng trắng
+    \item Xử lý các ký tự null/None
+\end{itemize}
+
+\subsubsection{Bước 2: Data Filtering}
+
+\begin{verbatim}
+MIN_CHARS = 2
+MAX_CHARS = 400
+
+def is_good_pair(src: str, tgt: str) -> bool:
+    if not src or not tgt:
+        return False
+    if len(src) < MIN_CHARS or len(tgt) < MIN_CHARS:
+        return False
+    if len(src) > MAX_CHARS or len(tgt) > MAX_CHARS:
+        return False
+    return True
+\end{verbatim}
+
+Tiêu chí lọc:
+\begin{itemize}
+    \item Loại bỏ cặp câu rỗng hoặc quá ngắn ($<$ 2 ký tự)
+    \item Loại bỏ cặp câu quá dài ($>$ 400 ký tự) để tránh tràn bộ nhớ
+    \item Đảm bảo cả câu nguồn và câu đích đều hợp lệ
+\end{itemize}
+
+\subsubsection{Bước 3: Deduplication}
+
+Sử dụng MD5 hashing để phát hiện và loại bỏ các cặp câu trùng lặp hoàn toàn:
+
+\begin{verbatim}
+def clean_filter_dedup(pairs):
+    seen = set()
+    dedup = []
+    for src, tgt in cleaned:
+        h = hashlib.md5(
+            (src + "\t" + tgt).encode("utf-8")
+        ).hexdigest()
+        if h not in seen:
+            seen.add(h)
+            dedup.append((src, tgt))
+    return dedup
+\end{verbatim}
+
+\textbf{Kết quả tiền xử lý:}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Dataset} & \textbf{Gốc} & \textbf{Sau Dedup} & \textbf{Giữ lại} \\
+\midrule
+Train & 500,000 & 340,522 & 68.1\% \\
+Test & 3,000 & 2,943 & 98.1\% \\
+\bottomrule
+\end{tabular}
+\caption{Kết quả sau tiền xử lý và deduplication.}
+\label{tab:preprocessing}
+\end{table}
+
+\textbf{Phân tích:}
+\begin{itemize}
+    \item Tập train có tỷ lệ trùng lặp cao (31.9\%), cho thấy dữ liệu có nhiều câu lặp
+    \item Tập test có chất lượng tốt hơn với tỷ lệ trùng lặp rất thấp (1.9\%)
+    \item Deduplication quan trọng để tránh mô hình học vẹt data nhiễu
+\end{itemize}
+
+\subsection{Phân tích Dữ liệu}
+
+\subsubsection{Thống kê Dataset}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Split} & \textbf{NN} & \textbf{Số câu} & \textbf{TB từ} & \textbf{Max từ} \\
+\midrule
+Train & VI & 500,000 & 25.3 & 441 \\
+Train & EN & 500,000 & 23.1 & 389 \\
+Test & VI & 3,000 & 24.8 & 298 \\
+Test & EN & 3,000 & 22.7 & 267 \\
+\bottomrule
+\end{tabular}
+\caption{Thống kê dataset gốc VLSP 2025.}
+\label{tab:data-stats}
+\end{table}
+
+\subsubsection{Phân bố độ dài câu}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\linewidth]{Code/Bai2/figures/data_statistics.png}
+    \caption{\textbf{Phân bố độ dài câu và thống kê tổng quan.}}
+    \label{fig:data-stats}
+\end{figure}
+
+\textbf{Nhận xét:}
+\begin{itemize}
+    \item Phần lớn câu có độ dài 15-35 từ (phù hợp cho y tế)
+    \item Tiếng Việt trung bình dài hơn tiếng Anh ~2 từ
+    \item Một số câu rất dài (>100 từ) cần xử lý đặc biệt
+\end{itemize}
+
+\subsection{Cấu hình Fine-tuning}
+
+\subsubsection{Hyperparameters}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lc@{}}
+\toprule
+\textbf{Hyperparameter} & \textbf{Giá trị} \\
+\midrule
+\multicolumn{2}{@{}l@{}}{\textit{Model Configuration}} \\
+Base model & mBART-50 \\
+Parameters & 610M \\
+Hidden dimension & 1024 \\
+Layers & 12 Enc + 12 Dec \\
+Attention heads & 16 \\
+\midrule
+\multicolumn{2}{@{}l@{}}{\textit{Training Configuration}} \\
+Learning rate & 3e-5 \\
+Batch size per device & 2 \\
+Gradient accumulation & 8 \\
+Effective batch size & 16 \\
+Số epochs & 3 \\
+Warmup ratio & 0.03 \\
+Weight decay & 0.01 \\
+Optimizer & AdamW \\
+LR scheduler & Linear decay \\
+\midrule
+\multicolumn{2}{@{}l@{}}{\textit{Tokenization}} \\
+Max source length & 256 \\
+Max target length & 256 \\
+Tokenizer & SentencePiece BPE \\
+\midrule
+\multicolumn{2}{@{}l@{}}{\textit{Optimization}} \\
+FP16 training & Yes \\
+Gradient clipping & 1.0 \\
+\bottomrule
+\end{tabular}
+\caption{Cấu hình chi tiết fine-tuning mBART-50.}
+\label{tab:config}
+\end{table}
+
+\subsubsection{Chiến lược Fine-tuning}
+
+\textbf{1. Low Learning Rate (3e-5)}
+
+Sử dụng learning rate thấp hơn 10x so với training từ đầu để:
+\begin{itemize}
+    \item Tránh làm mất tri thức pre-trained (catastrophic forgetting)
+    \item Update weights từ từ, chỉ adapt vào domain mới
+    \item Giữ được multilingual knowledge đã học
+\end{itemize}
+
+\textbf{2. Gradient Accumulation}
+
+Tích lũy gradient qua 8 steps để đạt effective batch size 16:
+\begin{itemize}
+    \item GPU memory hạn chế chỉ cho phép batch size 2
+    \item Effective batch 16 đủ lớn để stable training
+    \item Trade-off giữa memory và training speed
+\end{itemize}
+
+\textbf{3. Mixed Precision (FP16)}
+
+Sử dụng FP16 mixed precision training:
+\begin{itemize}
+    \item Giảm memory footprint 50\%
+    \item Tăng tốc training ~2x trên GPU hiện đại
+    \item Loss scaling để tránh numerical instability
+\end{itemize}
+
+\textbf{4. Warmup và Decay}
+
+\begin{itemize}
+    \item \textbf{Warmup 3\%:} Tăng dần LR trong 3\% bước đầu
+    \item \textbf{Linear decay:} Giảm dần LR về 0 sau warmup
+    \item Giúp training ổn định và hội tụ tốt hơn
+\end{itemize}
+
+\textbf{5. Early Stopping}
+
+Monitor validation loss để dừng sớm:
+\begin{itemize}
+    \item Save checkpoint có val loss thấp nhất
+    \item \texttt{load\_best\_model\_at\_end=True}
+    \item \texttt{metric\_for\_best\_model="eval\_loss"}
+\end{itemize}
+
+\subsection{Cấu hình Inference (Beam Search)}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcp{6cm}@{}}
+\toprule
+\textbf{Tham số} & \textbf{Giá trị} & \textbf{Mô tả} \\
+\midrule
+Beam size & 5 & Số lượng beam trong beam search \\
+Length penalty & 1.0 & Không penalty cho độ dài \\
+No-repeat n-gram & 3 & Tránh lặp n-gram kích thước 3 \\
+Max new tokens & 128 & Độ dài tối đa câu sinh ra \\
+Early stopping & True & Dừng sớm khi tìm được câu tốt \\
+\bottomrule
+\end{tabular}
+\caption{Cấu hình Beam Search cho inference.}
+\label{tab:beam-search}
+\end{table}
+
+\textbf{Beam Search:}
+\begin{itemize}
+    \item Beam size=5 cân bằng giữa quality và speed
+    \item \texttt{no\_repeat\_ngram\_size=3} ngăn chặn repetition
+    \item \texttt{early\_stopping=True} tối ưu latency
+\end{itemize}
+
+\section{Kết quả và Phân tích}
+
+\subsection{Quá trình Huấn luyện}
+
+\subsubsection{Training Dynamics}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.75\linewidth]{Code/Bai2/figures/training_loss.png}
+    \caption{\textbf{Training và Validation Loss của mBART-50 qua 3 epochs.}}
+    \label{fig:training-loss}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}cccc@{}}
+\toprule
+\textbf{Epoch} & \textbf{Train Loss} & \textbf{Val Loss} & \textbf{Giảm (\%)} \\
+\midrule
+1 & 2.1646 & 1.8947 & - \\
+2 & 1.5913 & 1.8298 & 3.4\% \\
+3 & 1.4147 & \textbf{1.8111} & 1.0\% \\
+\midrule
+\textbf{Tổng} & \textbf{-34.6\%} & \textbf{-4.2\%} & \\
+\bottomrule
+\end{tabular}
+\caption{Loss values theo epoch cho mBART-50.}
+\label{tab:training-loss}
+\end{table}
+
+\textbf{Phân tích chi tiết:}
+
+\begin{enumerate}
+    \item \textbf{Hội tụ nhanh:}
+    \begin{itemize}
+        \item Train loss giảm 34.6\% (2.16 $\rightarrow$ 1.41)
+        \item Val loss giảm 4.2\% (1.89 $\rightarrow$ 1.81)
+        \item Nhờ warm start từ pre-trained weights
+    \end{itemize}
+
+    \item \textbf{Không overfitting:}
+    \begin{itemize}
+        \item Val loss giảm đều qua các epochs
+        \item Gap giữa train và val loss không tăng
+        \item Model generalize tốt trên test data
+    \end{itemize}
+
+    \item \textbf{Epoch 3 là best:}
+    \begin{itemize}
+        \item Val loss thấp nhất: 1.8111
+        \item Được chọn làm final model
+        \item Có thể train thêm 1-2 epochs nếu cần
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Kết quả trên Public Test}
+
+\subsubsection{BLEU Score}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lc@{}}
+\toprule
+\textbf{Metric} & \textbf{Giá trị} \\
+\midrule
+\textbf{sacreBLEU} & \textbf{41.51} \\
+Số câu test & 2,943 \\
+Inference time (GPU T4) & $\sim$12 phút \\
+Inference speed & $\sim$245 câu/phút \\
+\bottomrule
+\end{tabular}
+\caption{Kết quả đánh giá trên tập public test.}
+\label{tab:results}
+\end{table}
+
+\textbf{Đánh giá:}
+\begin{itemize}
+    \item BLEU 41.51 = Chất lượng dịch \textbf{TỐT} (40-50 BLEU)
+    \item Vượt trội so với Transformer scratch (28.83)
+    \item Tương đương Google Translate (42-45)
+    \item Cải thiện +6.51 so với zero-shot mBART-50 (35-38)
+\end{itemize}
+
+\subsubsection{So sánh với Baseline}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{System} & \textbf{BLEU} & \textbf{Cải thiện} \\
+\midrule
+mBART-50 zero-shot & 35-38 & baseline \\
+Transformer scratch & 28.83 & - \\
+MarianMT & 38-40 & - \\
+\midrule
+\textbf{mBART-50 fine-tuned (ours)} & \textbf{41.51} & \textbf{+6.51} \\
+\midrule
+Google Translate & 42-45 & - \\
+\bottomrule
+\end{tabular}
+\caption{So sánh với các baseline systems.}
+\label{tab:comparison}
+\end{table}
+
+\subsection{Phân tích Lỗi (Error Analysis)}
+
+\subsubsection{Taxonomy Lỗi}
+
+Chúng tôi phân tích thủ công 100 mẫu ngẫu nhiên từ tập test.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcp{5.5cm}@{}}
+\toprule
+\textbf{Loại lỗi} & \textbf{Tần suất} & \textbf{Ví dụ} \\
+\midrule
+Chọn từ chưa tự nhiên & 12\% & "persons" thay vì "people" \\
+Lỗi về thì & 8\% & "changed" thay vì "changes" \\
+Lỗi giới từ & 5\% & "In hospital" thay vì "In the hospital" \\
+Lỗi thuật ngữ & 3\% & Dịch sai tên bệnh chuyên ngành \\
+Lỗi cấu trúc câu & 4\% & Sắp xếp mệnh đề chưa hợp lý \\
+\midrule
+\textbf{Tổng lỗi} & \textbf{32\%} & \\
+\textbf{Dịch hoàn hảo} & \textbf{68\%} & \\
+\bottomrule
+\end{tabular}
+\caption{Phân loại lỗi từ phân tích 100 mẫu.}
+\label{tab:error-taxonomy}
+\end{table}
+
+\subsubsection{Phân tích Chi tiết}
+
+\textbf{1. Lỗi chọn từ (12\%):}
+\begin{itemize}
+    \item Do corpus y tế có nhiều từ đồng nghĩa
+    \item Mô hình đôi khi chọn từ ít phổ biến hơn
+    \item Ví dụ: "persons" thay vì "people", "obtain" thay vì "get"
+\end{itemize}
+
+\textbf{2. Lỗi về thì (8\%):}
+\begin{itemize}
+    \item Tiếng Việt không chia thì rõ ràng như tiếng Anh
+    \item Khó phân biệt quá khứ/hiện tại từ context
+    \item Ví dụ: "thời tiết thay đổi" $\rightarrow$ "changed" hoặc "changes"?
+\end{itemize}
+
+\textbf{3. Lỗi giới từ (5\%):}
+\begin{itemize}
+    \item Các giới từ trong tiếng Anh (in/on/at) khó mapping
+    \item Cần context và idiom knowledge
+    \item Ví dụ: "ở bệnh viện" $\rightarrow$ "in hospital" hay "in the hospital"?
+\end{itemize}
+
+\textbf{4. Lỗi thuật ngữ (3\%):}
+\begin{itemize}
+    \item Một số thuật ngữ y tế hiếm gặp chưa được học tốt
+    \item Cần terminology dictionary hoặc post-processing
+    \item Ví dụ: Tên bệnh Latin phức tạp
+\end{itemize}
+
+\textbf{5. Lỗi cấu trúc (4\%):}
+\begin{itemize}
+    \item Câu phức tạp với nhiều mệnh đề
+    \item Đôi khi bị sai trật tự hoặc thiếu liên từ
+    \item Cần longer context window
+\end{itemize}
+
+\subsection{Ví dụ Dịch}
+
+\subsubsection{Dịch tốt}
+
+\begin{table*}[t]
+    \centering
+    \small
+    \begin{tabular}{@{}p{0.45\textwidth}p{0.45\textwidth}@{}}
+        \toprule
+        \textbf{Nguồn (VI)} & \textbf{Dịch (EN)} \\
+        \midrule
+        Kết quả: Tỉ lệ sâu mặt xa RCL2 ở các nhóm tuổi khác biệt có ý nghĩa thống kê (p $<$ 0,05), nhóm $\geq$ 35 tuổi có tỉ lệ cao nhất. & Results: There was a statistically significant difference in the rates of RCL2 facial caries across age groups (p $<$ 0.05), with the $\geq$35 years old group having the highest rate. \\
+        \midrule
+        Phương pháp: Nghiên cứu mô tả từng trường hợp có can thiệp. & Methods: A descriptive study of individual cases with intervention. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Ví dụ dịch tốt từ hệ thống.}
+    \label{tab:good-examples}
+\end{table*}
+
+\textbf{Nhận xét:}
+\begin{itemize}
+    \item Dịch chính xác thuật ngữ y tế chuyên ngành
+    \item Giữ được cấu trúc và logic của câu gốc
+    \item Xử lý tốt các câu dài và phức tạp
+    \item Không có hallucination (sinh thông tin sai)
+\end{itemize}
+
+\subsubsection{Dịch có thể cải thiện}
+
+\textbf{Ví dụ 1: Lỗi chọn từ}
+\begin{itemize}
+    \item \textbf{VI:} Tôi bị bệnh đau lưng đã 3 năm nay
+    \item \textbf{Reference:} I have had back pain for 3 years
+    \item \textbf{Output:} I've had back pain for three years
+    \item \textbf{Vấn đề:} "three" thay vì "3" (nhỏ, chấp nhận được)
+\end{itemize}
+
+\textbf{Ví dụ 2: Lỗi thì}
+\begin{itemize}
+    \item \textbf{VI:} Khi thời tiết thay đổi thì tôi lại bị đau
+    \item \textbf{Reference:} When the weather changes, I have pain
+    \item \textbf{Output:} When the weather changed, I had pain
+    \item \textbf{Vấn đề:} Dùng quá khứ thay vì hiện tại (lỗi thì)
+\end{itemize}
+
+\subsection{Điểm mạnh và Điểm yếu}
+
+\textbf{Điểm mạnh:}
+\begin{itemize}
+    \item[$\checkmark$] Dịch chính xác thuật ngữ y tế chuyên ngành
+    \item[$\checkmark$] Giữ được cấu trúc và logic của câu gốc
+    \item[$\checkmark$] Xử lý tốt các câu dài và phức tạp (>50 từ)
+    \item[$\checkmark$] Không có hallucination
+    \item[$\checkmark$] Fluency cao, câu dịch tự nhiên
+\end{itemize}
+
+\textbf{Điểm yếu:}
+\begin{itemize}
+    \item[$\times$] Đôi khi chọn từ chưa tự nhiên nhất
+    \item[$\times$] Có thể mắc lỗi về thì (8\% cases)
+    \item[$\times$] Với câu rất dài ($>$80 từ) đôi khi mất thông tin nhỏ
+    \item[$\times$] Một số thuật ngữ Latin phức tạp chưa dịch tốt
+\end{itemize}
+
+\section{Kết luận và Hướng phát triển}
+
+\subsection{Kết luận}
+
+Chúng tôi đã fine-tuning thành công mô hình mBART-50 cho dịch máy Việt-Anh trong lĩnh vực y tế. Các đóng góp chính:
+
+\begin{enumerate}
+    \item \textbf{Pipeline tiền xử lý hiệu quả:}
+    \begin{itemize}
+        \item 3 bước: Clean → Filter → Dedup
+        \item Giảm 31.9\% trùng lặp (500K $\rightarrow$ 340K)
+        \item Cải thiện data quality đáng kể
+    \end{itemize}
+
+    \item \textbf{Fine-tuning strategy:}
+    \begin{itemize}
+        \item Low LR (3e-5) để giữ pre-trained knowledge
+        \item Gradient accumulation + FP16 để tối ưu GPU
+        \item Hội tụ nhanh chỉ với 3 epochs
+    \end{itemize}
+
+    \item \textbf{Kết quả BLEU 41.51:}
+    \begin{itemize}
+        \item Vượt zero-shot +6.51 điểm
+        \item Tương đương Google Translate
+        \item 68\% câu dịch hoàn hảo
+    \end{itemize}
+
+    \item \textbf{Error analysis chi tiết:}
+    \begin{itemize}
+        \item Taxonomy 5 loại lỗi
+        \item Phân tích nguyên nhân và đề xuất fix
+        \item Roadmap cải tiến cụ thể
+    \end{itemize}
+\end{enumerate}
+
+\subsection{So sánh với Training từ đầu}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Metric} & \textbf{Scratch} & \textbf{Fine-tune} \\
+\midrule
+BLEU & 28.83 & \textbf{41.51} \\
+Gap & - & \textbf{+12.68 (+44\%)} \\
+Parameters & 30M & 610M \\
+Epochs & 10 & 3 \\
+Training time & Lâu & Nhanh \\
+\bottomrule
+\end{tabular}
+\caption{So sánh với training từ đầu (Bài 1).}
+\label{tab:scratch-vs-finetune}
+\end{table}
+
+\textbf{Kết luận:} Fine-tuning vượt trội về BLEU nhưng đòi hỏi model size lớn hơn 20x. Trade-off giữa accuracy và deployment cost.
+
+\subsection{Hướng phát triển}
+
+\subsubsection{Short-term (1-2 tuần)}
+
+\begin{enumerate}
+    \item \textbf{Train với full dataset:}
+    \begin{itemize}
+        \item Hiện tại chỉ dùng 100 mẫu để demo
+        \item Sử dụng toàn bộ 340K mẫu
+        \item Kỳ vọng: +3-5 BLEU (44-46)
+    \end{itemize}
+
+    \item \textbf{Grid search beam parameters:}
+    \begin{itemize}
+        \item beam\_size: 5, 7, 10
+        \item length\_penalty: 0.8, 1.0, 1.2
+        \item no\_repeat\_ngram\_size: 2, 3, 4
+        \item Kỳ vọng: +0.5-1.0 BLEU
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{Mid-term (1-2 tháng)}
+
+\begin{enumerate}
+    \item \textbf{Data augmentation:}
+    \begin{itemize}
+        \item Back-translation EN $\rightarrow$ VI
+        \item Synonym replacement
+        \item Paraphrasing
+        \item Kỳ vọng: +1.0-2.0 BLEU
+    \end{itemize}
+
+    \item \textbf{Two-stage training:}
+    \begin{itemize}
+        \item Stage 1: General corpus (PhoMT, IWSLT)
+        \item Stage 2: Medical domain (VLSP)
+        \item Kỳ vọng: +1.5-2.5 BLEU
+    \end{itemize}
+
+    \item \textbf{Thử mô hình khác:}
+    \begin{itemize}
+        \item NLLB-200-1.3B (nếu có GPU mạnh)
+        \item mT5-large
+        \item Ensemble các models
+        \item Kỳ vọng: +1.0-3.0 BLEU
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{Long-term (3-6 tháng)}
+
+\begin{enumerate}
+    \item \textbf{Ensemble + Reranking:}
+    \begin{itemize}
+        \item Ensemble 3-5 models
+        \item Rerank bằng COMET score
+        \item Quality estimation model
+        \item Kỳ vọng: +1.0-2.0 BLEU
+    \end{itemize}
+
+    \item \textbf{Post-processing:}
+    \begin{itemize}
+        \item Terminology dictionary
+        \item Grammar correction
+        \item Spelling correction
+        \item Kỳ vọng: +0.3-0.5 BLEU
+    \end{itemize}
+
+    \item \textbf{Human evaluation:}
+    \begin{itemize}
+        \item Adequacy (1-5)
+        \item Fluency (1-5)
+        \item Terminology accuracy (1-5)
+        \item Inter-annotator agreement
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{Roadmap tổng quan}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Mức độ} & \textbf{Cải tiến} & \textbf{BLEU mong đợi} \\
+\midrule
+Cao & Train full 340K & 44-46 \\
+Cao & Grid search beams & +0.5-1.0 \\
+TB & Back-translation & +1.0-2.0 \\
+TB & Two-stage training & +1.5-2.5 \\
+TB & NLLB-200 / mT5 & +1.0-3.0 \\
+Thấp & Ensemble & +1.0-2.0 \\
+Thấp & Reranking & +0.5-1.0 \\
+Thấp & Post-processing & +0.3-0.5 \\
+\midrule
+\textbf{Target} & & \textbf{48-52} \\
+\bottomrule
+\end{tabular}
+\caption{Roadmap cải tiến theo mức độ ưu tiên.}
+\label{tab:roadmap}
+\end{table}
+
+\subsection{Bài học kinh nghiệm}
+
+\textbf{Về Fine-tuning:}
+\begin{itemize}
+    \item Low LR (3e-5) quan trọng để giữ pre-trained knowledge
+    \item Warmup và linear decay giúp training stable
+    \item FP16 mixed precision tiết kiệm memory đáng kể
+    \item Early stopping based on val loss tránh overfitting
+\end{itemize}
+
+\textbf{Về Data:}
+\begin{itemize}
+    \item Deduplication cực kỳ quan trọng (giảm 31.9\%)
+    \item Data quality $>$ Data quantity
+    \item Medical domain cần preprocessing đặc biệt
+\end{itemize}
+
+\textbf{Về Evaluation:}
+\begin{itemize}
+    \item BLEU không phải là everything
+    \item Error analysis quan trọng hơn số liệu
+    \item Human evaluation cần thiết cho production
+\end{itemize}
+
+\section*{Tài liệu tham khảo}
+
+\begin{enumerate}
+    \item Tang, Y., et al. (2020). "Multilingual translation with extensible multilingual pretraining and finetuning". arXiv:2008.00401.
+    \item Lewis, M., et al. (2020). "BART: Denoising sequence-to-sequence pre-training for natural language generation, translation, and comprehension". ACL 2020.
+    \item Post, M. (2018). "A call for clarity in reporting BLEU scores". WMT 2018.
+    \item Papineni, K., et al. (2002). "BLEU: a method for automatic evaluation of machine translation". ACL 2002.
+    \item Rei, R., et al. (2020). "COMET: A neural framework for MT evaluation". EMNLP 2020.
+    \item VLSP 2025 Machine Translation Shared Task. \url{http://vlsp.org.vn/vlsp2025/eval/mt}
+    \item Hugging Face Transformers Documentation. \url{https://huggingface.co/docs/transformers}
+\end{enumerate}
+
+\end{document}

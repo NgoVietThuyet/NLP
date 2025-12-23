@@ -1,0 +1,369 @@
+\documentclass[11pt]{article}
+\usepackage{lmodern}
+\usepackage[final]{acl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T5]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{float}
+\usepackage{placeins}
+
+
+% Tiêu đề báo cáo
+\title{
+\textbf{BÁO CÁO BÀI TẬP LỚN MÔN XỬ LÝ NGÔN NGỮ TỰ NHIÊN} \\[0.5em]
+\large BÀI TOÁN 1: XÂY DỰNG MÔ HÌNH DỊCH MÁY SEQ2SEQ \\[0.3em]
+\large \textbf{VỚI KIẾN TRÚC TRANSFORMER}
+}
+
+% Thông tin nhóm tác giả
+\author{
+  \textbf{Đào Đức Mạnh} \\
+  MSV: 23021618 \\
+  \texttt{23021618@vnu.edu.vn} \\\And
+  \textbf{Ngọ Viết Thuyết} \\
+  MSV: 23021730 \\
+  \texttt{23021730@vnu.edu.vn} \\\AND
+  \textbf{Lưu Văn Hùng} \\
+  MSV: 23021566 \\
+  \texttt{23021566@vnu.edu.vn} \\[0.8em]
+}
+
+\setlength\titlebox{7cm}
+
+\begin{document}
+\maketitle
+
+\vspace{0.5em}
+\begin{abstract}
+Dịch máy là một trong những bài toán cốt lõi của Xử lý ngôn ngữ tự nhiên. Trong báo cáo này, chúng tôi trình bày quá trình xây dựng và tối ưu hóa một hệ thống dịch máy từ tiếng Anh sang tiếng Việt dựa trên kiến trúc Transformer hiện đại. Thay vì sử dụng kiến trúc Transformer cơ bản (Vaswani et al., 2017), chúng tôi tích hợp các kỹ thuật tiên tiến được sử dụng trong các mô hình ngôn ngữ lớn hiện nay như LLaMA, bao gồm: Mã hóa vị trí quay (Rotary Positional Embeddings - RoPE), hàm kích hoạt SwiGLU và cơ chế chú ý truy vấn nhóm (Grouped Query Attention - GQA). Mô hình được huấn luyện trên bộ dữ liệu chuẩn VLSP, sử dụng kỹ thuật Tokenization BPE và Label Smoothing. Kết quả thực nghiệm cho thấy mô hình đạt điểm BLEU 28.83 trên tập kiểm thử tst2013, thể hiện khả năng nắm bắt ngữ nghĩa và cấu trúc ngữ pháp tiếng Việt hiệu quả. Chúng tôi cũng phân tích chi tiết quá trình hội tụ của hàm mất mát và hiện tượng quá khớp (overfitting) để đưa ra các đề xuất cải thiện trong tương lai.
+\end{abstract}
+
+\section{Giới thiệu}
+
+\subsection{Tầm quan trọng của Dịch máy}
+
+\textbf{Giao tiếp toàn cầu:} Trong bối cảnh toàn cầu hóa ngày nay, giao tiếp và hợp tác giữa các quốc gia trở nên ngày càng phổ biến. Tuy nhiên, rào cản ngôn ngữ vẫn là một trong những thách thức lớn nhất mà con người phải đối mặt. Dịch thuật tự động đóng vai trò quan trọng trong việc giảm thiểu khó khăn này. Bằng cách tự động chuyển đổi văn bản từ ngôn ngữ này sang ngôn ngữ khác, các hệ thống dịch máy giúp mọi người từ các nền văn hóa và ngôn ngữ khác nhau có khả năng hiểu nhau dễ dàng hơn. Điều này không chỉ tạo điều kiện thuận lợi cho thương mại quốc tế mà còn thúc đẩy giao lưu văn hóa và trao đổi tri thức giữa các dân tộc.
+
+\textbf{Tiết kiệm thời gian và chi phí:} Việc sử dụng hệ thống dịch tự động thay cho dịch thuật thủ công giúp tiết kiệm đáng kể thời gian và chi phí. Đặc biệt trong các lĩnh vực yêu cầu dịch lượng lớn văn bản như giáo dục, thương mại điện tử và công nghệ thông tin, dịch thuật tự động trở thành một công cụ thiết yếu. Các công ty và tổ chức có thể nhanh chóng dịch các tài liệu, hợp đồng, và thông tin sản phẩm mà không cần phải đầu tư nhiều vào nguồn lực con người.
+
+\textbf{Hỗ trợ học tập và nghiên cứu:} Dịch thuật tự động cũng đóng vai trò quan trọng trong việc hỗ trợ học tập và nghiên cứu. Sinh viên và nhà nghiên cứu có thể dễ dàng tiếp cận với các tài liệu học thuật bằng tiếng Anh – ngôn ngữ chính trong nhiều lĩnh vực nghiên cứu. Nhờ vào dịch tự động, họ có thể mở rộng kiến thức của mình và cải thiện khả năng ngôn ngữ một cách hiệu quả hơn.
+
+\subsection{Bối cảnh và Động lực}
+
+Sự bùng nổ của các mô hình học sâu đã thay đổi hoàn toàn diện mạo của bài toán dịch máy. Từ các mô hình Dịch máy thống kê đến Dịch máy neural sử dụng RNN/LSTM, và bước ngoặt lớn nhất là sự ra đời của kiến trúc Transformer dựa trên cơ chế Attention.
+
+Tuy nhiên, đối với cặp ngôn ngữ Anh - Việt, thách thức vẫn còn rất lớn do sự khác biệt về loại hình ngôn ngữ (tiếng Anh là ngôn ngữ biến hình, tiếng Việt là ngôn ngữ đơn lập), cấu trúc ngữ pháp và sự đa dạng của từ vựng.
+
+\subsection{Mục tiêu}
+
+Trong bài tập lớn này, mục tiêu của chúng tôi là:
+\begin{enumerate}
+    \item Xây dựng một pipeline dịch máy hoàn chỉnh từ khâu tiền xử lý dữ liệu đến huấn luyện và đánh giá.
+    \item Cải tiến kiến trúc Transformer gốc để tăng hiệu suất huấn luyện và chất lượng bản dịch bằng các kỹ thuật: RoPE, SwiGLU, GQA.
+    \item Đánh giá định lượng (BLEU Score) và định tính (phân tích lỗi) kết quả đạt được.
+\end{enumerate}
+
+Báo cáo được cấu trúc như sau: Phần 2 trình bày cơ sở lý thuyết về các cải tiến kỹ thuật. Phần 3 mô tả chi tiết phương pháp thực hiện và cấu hình hệ thống. Phần 4 trình bày kết quả thực nghiệm và thảo luận. Cuối cùng là kết luận và hướng phát triển.
+
+\section{Cơ sở lý thuyết và Kiến trúc mô hình}
+
+Mô hình của chúng tôi dựa trên kiến trúc Encoder-Decoder của Transformer, nhưng các thành phần nội tại đã được thay thế bằng các phương pháp hiện đại hơn nhằm giải quyết các hạn chế của mô hình gốc.
+
+\subsection{Rotary Positional Embeddings (RoPE)}
+
+Transformer xử lý dữ liệu song song nên không có khái niệm về thứ tự từ như RNN. Mô hình gốc sử dụng Sinusoidal Positional Encoding cộng trực tiếp vào Embeddings. Tuy nhiên, phương pháp này hạn chế trong việc biểu diễn khoảng cách tương đối giữa các từ.
+
+Chúng tôi sử dụng RoPE (Su et al., 2021), một phương pháp mã hóa vị trí tuyệt đối bằng cách xoay vector trong không gian 2D để thu được tính chất của vị trí tương đối.
+
+Giả sử $x_m$ là vector embedding của từ tại vị trí $m$. Phép biến đổi RoPE được định nghĩa như sau:
+\begin{equation}
+    f(x, m) = \begin{pmatrix}
+\cos m\theta & -\sin m\theta \\
+\sin m\theta & \cos m\theta
+\end{pmatrix} \begin{pmatrix}
+x^{(1)} \\
+x^{(2)}
+\end{pmatrix}
+\end{equation}
+
+Trong đó $\theta$ là tần số quay. Kỹ thuật này giúp mô hình "hiểu" được rằng từ A đứng trước từ B bao xa, điều này cực kỳ quan trọng đối với ngữ pháp tiếng Việt (ví dụ: "nhà trắng" vs "white house" - đảo vị trí tính từ).
+
+\subsection{Hàm kích hoạt SwiGLU}
+
+Trong lớp Feed-Forward Network (FFN), thay vì sử dụng hàm ReLU tiêu chuẩn ($\max(0, x)$), chúng tôi sử dụng SwiGLU (Shazeer, 2020). SwiGLU là một biến thể của Gated Linear Unit (GLU) sử dụng hàm kích hoạt Swish.
+
+Công thức của lớp FFN sử dụng SwiGLU:
+\begin{equation}
+    \text{FFN}_{\text{SwiGLU}}(x) = (Swish(xW) \otimes xV)W_2
+\end{equation}
+
+Trong đó $\otimes$ là phép nhân từng phần tử. SwiGLU giúp luồng gradient lan truyền ổn định hơn và cho phép mô hình học các biểu diễn phức tạp sâu hơn so với ReLU.
+
+\subsection{Grouped Query Attention (GQA)}
+
+Multi-Head Attention (MHA) tiêu chuẩn đòi hỏi lưu trữ bộ nhớ KV-cache rất lớn khi suy luận. Multi-Query Attention (MQA) chia sẻ chung một đầu Key-Value cho tất cả các Query heads nhưng làm giảm hiệu năng.
+
+GQA (Ainslie et al., 2023) là giải pháp trung gian: chia các Query heads thành $G$ nhóm, mỗi nhóm chia sẻ một cặp Key-Value head.
+\begin{equation}
+    \text{Heads} = H, \quad \text{KV-Heads} = H / G
+\end{equation}
+
+Trong dự án này, chúng tôi thiết lập $H=8$ và $KV=4$ (tức là 2 Query heads chia sẻ 1 cặp KV). Điều này giúp giảm chi phí tính toán và bộ nhớ VRAM nhưng vẫn giữ được chất lượng dịch tương đương MHA.
+
+\subsection{Kiến trúc mô hình Transformer chi tiết}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.8\linewidth]{Code/Bai1/latex/transformer.png}
+    \caption{\textbf{Sơ đồ chi tiết kiến trúc Transformer đề xuất.}}
+    \label{fig:transformer_architecture}
+\end{figure}
+
+Dữ liệu văn bản đầu vào được chuyển đổi thành các vector số học qua lớp Token Embedding Layer. Trong khối Encoder (bên trái), dữ liệu đi qua chuỗi xử lý gồm lớp chuẩn hóa RMSNorm để ổn định quá trình huấn luyện, tiếp đến là lớp Grouped Query Self-Attention giúp mô hình tự học mối quan hệ ngữ cảnh giữa các từ trong câu, và sau đó được xử lý sâu hơn bởi mạng Feed Forward (thường dùng hàm kích hoạt SwiGLU).
+
+Tại khối Decoder (bên phải), quá trình bắt đầu với lớp Masked Grouped Query Self-Attention để dự đoán từ tiếp theo mà không nhìn thấy tương lai, sau đó kết hợp với thông tin từ Encoder thông qua lớp Grouped Query Cross-Attention (nhận Key và Value từ Encoder). Cuối cùng, kết quả đi qua lớp Linear Projection to Vocab để chiếu vector đặc trưng về kích thước từ điển, từ đó tính xác suất để chọn từ dịch tiếp theo chính xác nhất.
+
+\section{Phương pháp thực hiện}
+
+\subsection{Thống kê tập dữ liệu}
+
+Hình~\ref{fig:length_distribution} minh họa phân bố độ dài câu của tập huấn luyện và tập kiểm thử sau bước tokenization cho hai ngôn ngữ tiếng Việt và tiếng Anh.
+
+Phân bố của tập huấn luyện cho thấy phần lớn các câu có độ dài ngắn đến trung bình, trong khi chỉ tồn tại một tỷ lệ nhỏ các câu rất dài, tạo thành đuôi phân bố kéo dài. Đặc điểm này phù hợp với đặc trưng của bài toán dịch máy, nơi đa số câu mang cấu trúc đơn giản và chỉ một số ít chứa nhiều mệnh đề phức tạp.
+
+Tập kiểm thử có phân bố độ dài câu tương đồng với tập huấn luyện, cho thấy không tồn tại sự sai lệch đáng kể giữa dữ liệu huấn luyện và dữ liệu đánh giá. Điều này đảm bảo rằng kết quả đánh giá phản ánh đúng khả năng tổng quát hóa của mô hình.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.48\linewidth]{Code/Bai1/latex/Train_Statistics.png}
+    \includegraphics[width=0.48\linewidth]{Code/Bai1/latex/Test_Statistics (2).png}
+    \caption{\textbf{Phân bố độ dài câu sau tokenization của tập huấn luyện (Trái) và tập kiểm thử (Phải) cho hai ngôn ngữ tiếng Việt và tiếng Anh.}}
+    \label{fig:length_distribution}
+\end{figure}
+
+\FloatBarrier
+
+Dựa trên các thống kê này, chúng tôi lựa chọn ngưỡng độ dài chuỗi tối đa phù hợp và áp dụng cơ chế batching theo số token nhằm cân bằng giữa mức độ bao phủ dữ liệu và chi phí tính toán khi huấn luyện mô hình Transformer.
+
+\subsection{Tiền xử lý dữ liệu (Data Preprocessing)}
+
+Dữ liệu đầu vào từ bộ VLSP chứa nhiều nhiễu. Quy trình làm sạch (cleaning) bao gồm:
+\begin{itemize}
+    \item \textbf{Unicode Normalization:} Chuyển toàn bộ văn bản về chuẩn NFC để thống nhất mã hóa tiếng Việt (tránh lỗi font, lỗi dấu).
+    \item \textbf{Lowercasing:} Chuyển về chữ thường để giảm kích thước từ điển (Vocabulary Size).
+    \item \textbf{Contraction Expansion:} Tách các từ viết tắt tiếng Anh (ví dụ: "I'm" $\rightarrow$ "I am", "don't" $\rightarrow$ "do not") bằng Regular Expression để mô hình học ngữ pháp rõ ràng hơn.
+    \item \textbf{Loại bỏ HTML/Special Chars:} Xóa các thẻ tag và ký tự đặc biệt vô nghĩa.
+\end{itemize}
+
+\subsection{Tokenization (BPE)}
+
+Chúng tôi sử dụng thuật toán \textbf{Byte Pair Encoding (BPE)} để xây dựng bộ từ điển.
+\begin{itemize}
+    \item Kích thước từ điển (Vocab Size): 10,000 token cho mỗi ngôn ngữ.
+    \item Token đặc biệt: \texttt{[PAD]}, \texttt{[START]}, \texttt{[END]}, \texttt{[UNK]}.
+\end{itemize}
+
+Việc sử dụng BPE giúp giải quyết triệt để vấn đề từ vựng mở (Out-of-Vocabulary), cho phép mô hình dịch được cả những từ ghép hoặc từ mượn chưa từng xuất hiện trong tập huấn luyện.
+
+\subsection{Cấu hình Huấn luyện}
+
+Thông số chi tiết của quá trình huấn luyện được trình bày trong Bảng~\ref{tab:hyperparams}.
+
+\begin{table}[h]
+    \centering
+    \resizebox{\columnwidth}{!}{%
+        \begin{tabular}{@{}lc@{}}
+            \toprule
+            \textbf{Tham số} & \textbf{Giá trị} \\
+            \midrule
+            Hidden Dimension ($d_{model}$) & 256 \\
+            Số lớp (Layers) & 4 Enc / 4 Dec \\
+            Số Attention Heads ($H$) & 8 \\
+            Số KV Heads (GQA) & 4 \\
+            Dropout & 0.1 \\
+            Optimizer & AdamW \\
+            Learning Rate & $5 \times 10^{-4}$ \\
+            Batch Size & 32 \\
+            Số Epochs & 10 \\
+            Loss Function & CrossEntropy \\
+            Label Smoothing & 0.1 \\
+            \bottomrule
+        \end{tabular}%
+    }
+    \caption{Các siêu tham số (Hyperparameters) của mô hình.}
+    \label{tab:hyperparams}
+\end{table}
+
+\textbf{Label Smoothing:} Chúng tôi áp dụng kỹ thuật làm trơn nhãn với hệ số $\epsilon=0.1$. Thay vì ép mô hình dự đoán xác suất tuyệt đối (1.0 cho từ đúng, 0.0 cho các từ khác), chúng tôi phân phối một phần nhỏ xác suất cho các từ sai. Điều này giúp tránh hiện tượng mô hình quá tự tin (overconfidence) dẫn đến overfitting.
+
+\section{Kết quả thực nghiệm và Thảo luận}
+
+\subsection{Quá trình hội tụ (Convergence Analysis)}
+
+Mô hình được huấn luyện trong 10 epochs. Diễn biến của hàm mất mát (Loss) trên tập Train và Validation được thể hiện trong Hình~\ref{fig:loss_large}.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Code/Bai1/loss_graph.png}
+    \caption{\textbf{Đồ thị Training Loss và Validation Loss qua 10 Epochs.}}
+    \label{fig:loss_large}
+\end{figure*}
+
+\textbf{Phân tích đồ thị:}
+\begin{itemize}
+    \item \textbf{Giai đoạn đầu (Epoch 1-3):} Loss giảm rất nhanh (Train loss từ 4.33 xuống 3.20), cho thấy tốc độ học (Learning Rate) phù hợp và mô hình nhanh chóng nắm bắt các đặc trưng cơ bản.
+    \item \textbf{Điểm tối ưu (Epoch 7):} Validation Loss đạt giá trị thấp nhất ($\sim 3.31$) tại Epoch 7. Đây là thời điểm mô hình đạt độ cân bằng tốt nhất giữa khả năng ghi nhớ và khả năng tổng quát hóa (Generalization).
+    \item \textbf{Dấu hiệu Overfitting:} Sau Epoch 7, trong khi Training Loss tiếp tục giảm sâu (xuống 2.55 ở Epoch 10), Validation Loss bắt đầu đi ngang và có xu hướng tăng nhẹ. Điều này cho thấy mô hình bắt đầu học vẹt các nhiễu trong tập huấn luyện.
+\end{itemize}
+
+$\Rightarrow$ \textit{Kết luận:} Chúng tôi lựa chọn Checkpoint tại \textbf{Epoch 7} làm mô hình cuối cùng để đánh giá.
+
+\subsection{Đánh giá định lượng (BLEU Score)}
+
+Chúng tôi sử dụng thang đo BLEU thông qua thư viện \texttt{sacrebleu} để đánh giá chất lượng bản dịch trên tập Test (tst2013).
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Phương pháp Decoding} & \textbf{BLEU Score} \\
+        \midrule
+        Greedy Search & 28.50 \\
+        Beam Search (Width=3) & \textbf{28.83} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Kết quả đánh giá trên tập test tst2013.}
+    \label{tab:bleu}
+\end{table}
+
+Điểm số \textbf{28.83} là một kết quả khả quan đối với tập dữ liệu quy mô nhỏ và trung bình như VLSP, chứng tỏ hiệu quả của các cải tiến kiến trúc (RoPE, GQA) so với các baseline truyền thống (thường chỉ đạt 15-20 BLEU với cấu hình mặc định).
+
+\subsection{Đánh giá định tính (Case Studies)}
+
+Bảng~\ref{tab:examples} trình bày một số ví dụ thực tế từ mô hình:
+
+\begin{table*}[t]
+    \centering
+    \small
+    \begin{tabular}{@{}p{5cm}p{5cm}p{4cm}@{}}
+        \toprule
+        \textbf{Câu Tiếng Anh (Input)} & \textbf{Câu Tiếng Việt (Target)} & \textbf{Mô hình Dịch (Output)} \\
+        \midrule
+        it 's really become sacred to us . & nó trở nên thật thiêng liêng với chúng tôi . & nó thực sự là một thành ngữ . \\
+        \midrule
+        and he said that he needed those guns because of the trauma... & và anh ta nói rằng anh ta cần những cây súng này bởi vì... & và ông ấy nói rằng ông cần những con súng đó vì... \\
+        \midrule
+        i 'd like to talk to you today about the scale of the scientific effort... & tôi muốn cho các bạn biết về sự to lớn của những nỗ lực khoa học... & tôi muốn nói chuyện với các bạn về quy mô của nỗ lực khoa học... \\
+        \bottomrule
+    \end{tabular}
+    \caption{Một số mẫu dịch thực tế từ tập Test.}
+    \label{tab:examples}
+\end{table*}
+
+\textbf{Nhận xét:}
+\begin{itemize}
+    \item \textbf{Ưu điểm:} Mô hình dịch rất tốt các câu dài, cấu trúc phức tạp (Ví dụ 2, 3). Nó nắm bắt được ngữ cảnh "scientific effort" (nỗ lực khoa học) và sắp xếp từ ngữ tiếng Việt trôi chảy.
+    \item \textbf{Hạn chế:} Với các câu ngắn hoặc chứa từ đa nghĩa (Ví dụ 1: "sacred" - thiêng liêng), mô hình đôi khi bị nhầm lẫn ngữ cảnh ("thành ngữ"). Điều này có thể do dữ liệu huấn luyện chưa đủ phong phú ở các ngữ cảnh giao tiếp ngắn gọn.
+\end{itemize}
+
+\section{Kết luận và Hướng phát triển}
+
+\subsection{Kết luận}
+
+Trong dự án này, chúng tôi đã xây dựng thành công hệ thống dịch máy Anh-Việt sử dụng kiến trúc Transformer cải tiến. Việc tích hợp \textbf{RoPE}, \textbf{SwiGLU}, và \textbf{GQA} đã giúp mô hình đạt hiệu suất cao (BLEU 28.83) và hội tụ nhanh chóng. Phân tích hàm Loss cho thấy tầm quan trọng của việc chọn điểm dừng sớm (Early Stopping) để tránh Overfitting.
+
+Các đóng góp chính của báo cáo:
+\begin{enumerate}
+    \item Pipeline dịch máy hoàn chỉnh từ tiền xử lý đến đánh giá
+    \item Kiến trúc Transformer hiện đại với RoPE, SwiGLU, GQA
+    \item Đánh giá chi tiết về quá trình hội tụ và phân tích lỗi
+    \item BLEU 28.83 - tốt cho model size 30M parameters
+\end{enumerate}
+
+\subsection{Hướng phát triển}
+
+Để nâng cao chất lượng mô hình hướng tới đạt trên 30 BLEU, chúng tôi đề xuất:
+
+\begin{enumerate}
+    \item \textbf{Tăng cường dữ liệu (Data Augmentation):}
+    \begin{itemize}
+        \item Sử dụng kỹ thuật Back-Translation (Dịch ngược) để tạo thêm dữ liệu giả lập từ các nguồn đơn ngữ tiếng Việt
+        \item Synonym replacement để tăng đa dạng từ vựng
+        \item Paraphrasing để tạo biến thể câu
+    \end{itemize}
+
+    \item \textbf{Beam Search nâng cao:}
+    \begin{itemize}
+        \item Tối ưu hóa thuật toán Beam Search với Length Penalty để xử lý tốt hơn độ dài câu dịch
+        \item Thử nghiệm với beam width lớn hơn (5, 7, 10)
+        \item Diverse beam search để tăng đa dạng output
+    \end{itemize}
+
+    \item \textbf{Ensemble Learning:}
+    \begin{itemize}
+        \item Huấn luyện nhiều mô hình với khởi tạo ngẫu nhiên khác nhau
+        \item Kết hợp kết quả dự đoán bằng voting hoặc averaging
+        \item Ensemble các checkpoint khác nhau (epoch 5, 6, 7)
+    \end{itemize}
+
+    \item \textbf{Tăng model capacity:}
+    \begin{itemize}
+        \item Tăng hidden dimension từ 256 lên 512
+        \item Tăng số layers từ 4 lên 6-8 layers
+        \item Thử nghiệm với deeper và wider architectures
+    \end{itemize}
+
+    \item \textbf{Knowledge Distillation:}
+    \begin{itemize}
+        \item Sử dụng mô hình lớn hơn (như mBART-50) làm teacher
+        \item Distill knowledge vào mô hình nhỏ gọn hơn
+        \item Cân bằng giữa performance và efficiency
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Bài học kinh nghiệm}
+
+\textbf{Về kiến trúc:}
+\begin{itemize}
+    \item RoPE hiệu quả hơn Sinusoidal Positional Encoding
+    \item GQA giảm đáng kể memory footprint mà không làm giảm BLEU
+    \item SwiGLU giúp gradient flow ổn định hơn ReLU
+\end{itemize}
+
+\textbf{Về huấn luyện:}
+\begin{itemize}
+    \item Label Smoothing quan trọng để tránh overconfidence
+    \item Early Stopping at Epoch 7 tránh overfitting
+    \item Validation monitoring là chìa khóa để chọn best checkpoint
+\end{itemize}
+
+\textbf{Về dữ liệu:}
+\begin{itemize}
+    \item BPE tokenization giải quyết tốt OOV problem
+    \item Unicode normalization quan trọng cho tiếng Việt
+    \item Data quality > Data quantity trong nhiều trường hợp
+\end{itemize}
+
+\section*{Tài liệu tham khảo}
+
+\begin{enumerate}
+    \item Vaswani, A., et al. (2017). "Attention Is All You Need". NeurIPS.
+    \item Su, J., et al. (2021). "RoFormer: Enhanced Transformer with Rotary Position Embedding". Neurocomputing.
+    \item Shazeer, N. (2020). "GLU Variants Improve Transformer". arXiv preprint.
+    \item Ainslie, J., et al. (2023). "GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints". arXiv.
+    \item VLSP Consortium. (2013). "VLSP English-Vietnamese Machine Translation Shared Task".
+    \item Sennrich, R., et al. (2016). "Neural Machine Translation of Rare Words with Subword Units". ACL.
+    \item Szegedy, C., et al. (2016). "Rethinking the Inception Architecture for Computer Vision". CVPR.
+\end{enumerate}
+
+\end{document}
