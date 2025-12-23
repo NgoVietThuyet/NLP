@@ -1,11 +1,13 @@
 # Bài Tập Lớn NLP - 2025
 
 **Sinh viên**: 
+
 Ngô Viết Thuyết: 23021730 
 
 Đào Đức Mạnh: 23021618 
 
 Lưu Văn Hùng: 23021566
+
 **Trường**: Đại học Công nghệ - ĐHQGHN
 
 ---
