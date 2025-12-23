@@ -3,8 +3,9 @@
 **Đề tài**: Xử Lý Ngôn Ngữ Tự Nhiên - Text Classification & Machine Translation
 
 **Sinh viên thực hiện**:
-- Ngô Viết Thuyết
-- Nguyễn Đức Hưng
+- Ngô Viết Thuyết: 23021730
+- Đào Đức Mạnh: 23021618
+- Lưu Văn Hùng: 23021566
 
 **Trường**: Đại học Công nghệ - ĐHQGHN
 
