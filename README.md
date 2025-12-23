@@ -1,4 +1,4 @@
-# 🎓 Bài Tập Lớn Môn NLP - Học Kì 2025
+#  Bài Tập Lớn Môn NLP - Học Kì 2025
 
 **Đề tài**: Xử Lý Ngôn Ngữ Tự Nhiên - Text Classification & Machine Translation
 
@@ -11,7 +11,7 @@
 
 ---
 
-## 📋 Mục Lục
+## Mục Lục
 
 - [Tổng Quan](#-tổng-quan)
 - [Bài 1: Text Classification](#-bài-1-text-classification)
@@ -24,7 +24,7 @@
 
 ---
 
-## 🎯 Tổng Quan
+## Tổng Quan
 
 Repository này chứa giải pháp cho 2 bài tập lớn môn NLP:
 
@@ -33,19 +33,19 @@ Repository này chứa giải pháp cho 2 bài tập lớn môn NLP:
 
 ---
 
-## 📝 Bài 1: Text Classification
+## Bài 1: Text Classification
 
-### 🎯 Mục tiêu
+### Mục tiêu
 
 Xây dựng mô hình phân loại văn bản sử dụng kiến trúc **Transformer từ scratch** (không dùng pre-trained).
 
-### 📊 Dataset
+###  Dataset
 
 - **Source**: Custom dataset
 - **Task**: Multi-class text classification
 - **Data location**: `Data/Data1/`
 
-### 🏗️ Kiến trúc
+### Kiến trúc
 
 **Transformer Architecture**:
 - **Encoder**: Multi-head self-attention + Feed-forward network
@@ -73,15 +73,15 @@ jupyter notebook Code/Bai1/transformerFinalHung.ipynb
 
 ---
 
-## 🌐 Bài 2: Machine Translation
+## Bài 2: Machine Translation
 
-### 🎯 Mục tiêu
+### Mục tiêu
 
 Fine-tune mô hình **mBART-50** cho 2 hướng dịch:
 1. **Tiếng Việt → Tiếng Anh** (Medical domain)
 2. **Tiếng Anh → Tiếng Việt** (Medical domain)
 
-### 📊 Dataset
+### Dataset
 
 - **Source**: Medical research abstracts
 - **Size**: 500,000 parallel sentences (EN-VI)
@@ -97,7 +97,7 @@ Data/Data2/
 └── public_test.vi.txt        (3,000 sentences)
 ```
 
-### 🏗️ Model Architecture
+### Model Architecture
 
 **mBART-50** (facebook/mbart-large-50-many-to-many-mmt):
 - **Type**: Multilingual Seq2Seq Transformer
@@ -106,7 +106,7 @@ Data/Data2/
 - **Pre-training**: Denoising autoencoding
 - **Fine-tuning**: Medical domain EN-VI translation
 
-### 📁 Files
+### Files
 
 ```
 Code/Bai2/
@@ -114,7 +114,7 @@ Code/Bai2/
 ├── mBART50_EN_VI.ipynb       
 ```
 
-### 🔧 Training Configuration
+### Training Configuration
 
 #### **Common Config**:
 ```python
@@ -154,7 +154,6 @@ LEARNING_RATE = 3e-5         # Higher LR for EN→VI
 | Metric | Baseline | Fine-tuned | Improvement |
 |--------|----------|------------|-------------|
 | **BLEU** | 17.77 | **31.75** | +13.98 |
-| **Gemini Judge** | - | 78.5/100 | - |
 | **Medical Score** | 54.8/100 | 70.1/100 | +15.3 |
 
 **Top Errors**:
@@ -167,7 +166,6 @@ LEARNING_RATE = 3e-5         # Higher LR for EN→VI
 | Metric | Baseline | Fine-tuned | Improvement |
 |--------|----------|------------|-------------|
 | **BLEU** | 26.09 | **43.42** | +17.33 |
-| **Gemini Judge** | - | 75.2/100 | - |
 | **Medical Score** | 67.1/100 | 72.9/100 | +5.8 |
 
 **Top Errors**:
@@ -194,8 +192,6 @@ LEARNING_RATE = 3e-5         # Higher LR for EN→VI
 #### **Evaluation**:
 - ✅ sacreBLEU scoring
 - ✅ Error analysis (automatic error tagging)
-- ✅ Gemini Judge scoring (LLM-based evaluation)
-- ✅ Medical domain scoring (rule-based)
 - ✅ Visualization (loss curves, error distribution)
 
 ### 🚀 Cách chạy
