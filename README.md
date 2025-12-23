@@ -1,6 +1,9 @@
 # Bài Tập Lớn NLP - 2025
 
-**Sinh viên**: Ngô Viết Thuyết, Nguyễn Đức Hưng
+**Sinh viên**: 
+Ngô Viết Thuyết: 23021730 
+Đào Đức Mạnh: 23021618    
+Lưu Văn Hùng: 23021566
 **Trường**: Đại học Công nghệ - ĐHQGHN
 
 ---
@@ -8,12 +11,12 @@
 ## Tổng Quan
 
 Repository chứa 2 bài tập lớn môn NLP:
-- **Bài 1**: Text Classification với Transformer (từ scratch)
-- **Bài 2**: Machine Translation EN-VI với mBART-50
+- **Bài 1**: Xây dựng mô hình dịch máy Seq2Seq với Transformer (từ scratch)
+- **Bài 2**: Áp dụng cho bài toán VLSP 2025 Shared Task - Machine transaltion
 
 ---
 
-## Bài 1: Text Classification
+## Bài 1: 
 
 ### Mô tả
 Xây dựng mô hình phân loại văn bản bằng **Transformer từ đầu** (không dùng pre-trained).
@@ -30,7 +33,7 @@ Code/Bai1/transformerFinalHung.ipynb
 
 ---
 
-## Bài 2: Machine Translation
+## Bài 2: 
 
 ### Mô tả
 Fine-tune **mBART-50** cho dịch máy Y khoa Anh-Việt (2 chiều).
@@ -52,8 +55,6 @@ Fine-tune **mBART-50** cho dịch máy Y khoa Anh-Việt (2 chiều).
 Code/Bai2/
 ├── mBART50_VI_EN.ipynb      # Notebook VI→EN (66 cells)
 ├── mBART50_EN_VI.ipynb      # Notebook EN→VI (52 cells)
-├── NOTEBOOK_GUIDE.md        # Hướng dẫn chi tiết
-└── MARKDOWN_*.txt           # Giải thích từng cell
 ```
 
 ### Models
@@ -95,7 +96,6 @@ NLP/
 │   └── Bai2/
 │       ├── mBART50_VI_EN.ipynb
 │       ├── mBART50_EN_VI.ipynb
-│       └── NOTEBOOK_GUIDE.md
 └── Data/
     ├── Data1/          # Dataset Bài 1
     └── Data2/          # Dataset Bài 2 (500k EN-VI pairs)
@@ -169,13 +169,3 @@ jupyter notebook Code/Bai2/mBART50_VI_EN.ipynb
 - **Models**: [mBART-50](https://huggingface.co/facebook/mbart-large-50-many-to-many-mmt)
 - **Docs**: [Transformers](https://huggingface.co/docs/transformers), [sacreBLEU](https://github.com/mjpost/sacrebleu)
 
----
-
-## License
-
-MIT License
-
----
-
-**Repository**: https://github.com/NgoVietThuyet/NLP
-**Last Updated**: December 2024
